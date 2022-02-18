@@ -1,47 +1,54 @@
+"""
+A module for creating a map of user twitter's 25 friend's locations
+"""
 from flask import Flask
-from flask import Response
-import requests
-import json
 import folium as fo
 from geopy.geocoders import Nominatim
 from geopy.extra.rate_limiter import RateLimiter
+from requests_oauthlib import OAuth1Session
+
+
+consumer_key = "ZkCetUl5yQfvwtNglUyQOZxjX"
+consumer_secret = "rnrAIp9tRMnQ1ODWCH0GTvEyFimIBFnrR7Sa1WNyQVH1dcxUBD"
+access_token = "1493549658597117958-dDksXeTSgbKeZWTXNjNZ9mzwS7j52j"
+token_secret = "hC66cal6lNrNbxXCkDJSLG9nvVtz1TQzTHIeuKZKzLfTs"
 
 
 def get_user_id(username):
+    """
+    Returns user's id from twitter
+    (str) -> str
+    """
 
     url = "https://api.twitter.com/2/users/by/username/" + username
 
-    payload={}
-    headers = {
-    'Authorization': 'OAuth oauth_consumer_key="ZkCetUl5yQfvwtNglUyQOZxjX",oauth_token="1493549658597117958-dDksXeTSgbKeZWTXNjNZ9mzwS7j52j",oauth_signature_method="HMAC-SHA1",oauth_timestamp="1645042984",oauth_nonce="tHUOaER28oC",oauth_version="1.0",oauth_signature="qB2r98AB7%2F9ynGYh%2BHz09YdUHw0%3D"'
-    }
+    twitter = OAuth1Session(consumer_key, client_secret=consumer_secret, resource_owner_key=access_token, resource_owner_secret=token_secret)
+    response = twitter.get(url)
 
-    response = requests.request("GET", url, headers=headers, data=payload)
     return response.json()["data"]["id"]
 
-def get_friends_locations(id):
 
+def get_friends_locations(id):
+    """
+    Returns user friends locations
+    (str) -> list
+    """
     url = "https://api.twitter.com/2/users/" + id + "/following?user.fields=location"
 
-    payload={}
-    headers = {
-    'Authorization': 'OAuth oauth_consumer_key="ZkCetUl5yQfvwtNglUyQOZxjX",oauth_token="1493549658597117958-dDksXeTSgbKeZWTXNjNZ9mzwS7j52j",oauth_signature_method="HMAC-SHA1",oauth_timestamp="1645043546",oauth_nonce="4TnymrxnrGC",oauth_version="1.0",oauth_signature="uMXbEn47Tm4RbyzPBi8U7fJSJk0%3D"'
-    }
+    twitter = OAuth1Session(consumer_key, client_secret=consumer_secret, resource_owner_key=access_token, resource_owner_secret=token_secret)
+    response = twitter.get(url).json()["data"]
 
-    response = requests.request("GET", url, headers=headers, data=payload)
-    response = response.json()
-    response = response["data"]
-    
     locations_lst = []
     for friend in response:
         if "location" in friend.keys():
             locations_lst.append([friend["name"], friend["location"]])
     return locations_lst
 
+
 def get_coords(info_locations):
     """
-    Gets coordinations of needed places and finds distance
-    (float, float, list) -> list
+    Gets coordinations of 25 needed places
+    (list) -> list
     """
     geolocator = Nominatim(user_agent="main.py")
     geocode = RateLimiter(geolocator.geocode, min_delay_seconds=0.001)
@@ -58,9 +65,15 @@ def get_coords(info_locations):
         if len(info_locations[i]) >= 4:
             new_info.append(info_locations[i])
     very_new_info = []
-    for i in range(10):
-        very_new_info.append(new_info[i])
+    if len(new_info) < 25:
+        num = len(new_info)
+        for i in range(num):
+            very_new_info.append(new_info[i])
+    else:
+        for i in range(25):
+            very_new_info.append(new_info[i])
     return very_new_info
+
 
 def create_a_map(locs):
     """
@@ -86,7 +99,7 @@ def create_a_map(locs):
 
     fg = fo.FeatureGroup(name="Friend's locations")
     for lt, ln, pl, nm in zip(latitude, longitude, places, name):
-        iframe = fo.IFrame(html=html_1.format(nm, pl), width=400, height=150)
+        iframe = fo.IFrame(html=html_1.format(nm, pl), width=200, height=100)
         fg.add_child(fo.Marker(location=[lt, ln], popup=fo.Popup(iframe), icon=fo.Icon(color="darkred")))
     fg_list.append(fg)
 
@@ -97,9 +110,13 @@ def create_a_map(locs):
 
 app = Flask(__name__)
 
+
 @app.route('/twitter/map/<username>')
-def get_map(username):    
+def get_map(username):
+    """
+    main func
+    """
     id = get_user_id(username)
     locations_lst = get_friends_locations(id)
-    coords_and_locs= get_coords(locations_lst)
+    coords_and_locs = get_coords(locations_lst)
     return create_a_map(coords_and_locs)
